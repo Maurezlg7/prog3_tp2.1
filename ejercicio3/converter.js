@@ -19,11 +19,9 @@ class CurrencyConverter {
                 const currency = new Currency(key, data[key]);
                 this.currencies.push(currency);
             });
-            console.log(this.currencies);
         } catch (error) {
             console.error('Error al obtener las monedas:', error);
         }
-
     }
 
     async convertCurrency(amount, fromCurrency, toCurrency) {
@@ -40,7 +38,44 @@ class CurrencyConverter {
             return null;
         }
     }
-    
+
+    async getExchangeRatesForDate(date) {
+        try {
+            const response = await fetch(`${this.apiUrl}/${date}`);
+            const data = await response.json();
+            return data.rates;
+        } catch (error) {
+            console.error(`Error al obtener tasas de cambio para la fecha ${date}:`, error);
+            return null;
+        }
+    }
+
+    async compareExchangeRates(toCurrencyCode) {
+        const today = new Date();
+        const yesterday = new Date(today);
+        yesterday.setDate(today.getDate() - 1);
+
+        const formattedYesterday = yesterday.toISOString().split('T')[0];
+        const urlToday = `${this.apiUrl}/latest`;
+        const urlYesterday = `${this.apiUrl}/${formattedYesterday}`;
+
+        try {
+            const responseToday = await fetch(urlToday);
+            const dataToday = await responseToday.json();
+
+            const responseYesterday = await fetch(urlYesterday);
+            const dataYesterday = await responseYesterday.json();
+
+            const rateToday = dataToday.rates[toCurrencyCode];
+            const rateYesterday = dataYesterday.rates[toCurrencyCode];
+            const difference = rateToday - rateYesterday;
+
+            return { rateToday, rateYesterday, difference };
+        } catch (error) {
+            console.error('Error al comparar tasas de cambio:', error);
+            return null;
+        }
+    }
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -73,9 +108,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         );
 
         if (convertedAmount !== null && !isNaN(convertedAmount)) {
-            resultDiv.textContent = `${amount} ${
-                fromCurrency.code
-            } son ${convertedAmount.toFixed(2)} ${toCurrency.code}`;
+            const { rateToday, rateYesterday, difference } = await converter.compareExchangeRates(toCurrency.code);
+            resultDiv.innerHTML = `
+                ${amount} ${fromCurrency.code} son ${convertedAmount.toFixed(2)} ${toCurrency.code}<br>
+                Tasa de cambio hoy: ${rateToday}<br>
+                Tasa de cambio ayer: ${rateYesterday}<br>
+                Diferencia: ${difference}
+            `;
         } else {
             resultDiv.textContent = "Error al realizar la conversión.";
         }
